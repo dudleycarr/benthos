@@ -5,9 +5,12 @@ import (
 	"crypto/tls"
 	"io/ioutil"
 	llog "log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nsqio/go-nsq"
 
 	"github.com/Jeffail/benthos/v3/lib/log"
 	"github.com/Jeffail/benthos/v3/lib/message"
@@ -15,7 +18,6 @@ import (
 	"github.com/Jeffail/benthos/v3/lib/metrics"
 	"github.com/Jeffail/benthos/v3/lib/types"
 	btls "github.com/Jeffail/benthos/v3/lib/util/tls"
-	nsq "github.com/nsqio/go-nsq"
 )
 
 //------------------------------------------------------------------------------
@@ -29,6 +31,7 @@ type NSQConfig struct {
 	UserAgent       string             `json:"user_agent" yaml:"user_agent"`
 	TLS             btls.Config        `json:"tls" yaml:"tls"`
 	MaxInFlight     int                `json:"max_in_flight" yaml:"max_in_flight"`
+	MaxAttempts     int                `json:"max_attempts" yaml:"max_attempts"`
 	Batching        batch.PolicyConfig `json:"batching" yaml:"batching"`
 }
 
@@ -42,6 +45,7 @@ func NewNSQConfig() NSQConfig {
 		UserAgent:       "benthos_consumer",
 		TLS:             btls.NewConfig(),
 		MaxInFlight:     100,
+		MaxAttempts:     5,
 		Batching:        batch.NewPolicyConfig(),
 	}
 }
@@ -197,7 +201,15 @@ func (n *NSQ) ReadWithContext(ctx context.Context) (types.Message, AsyncAckFn, e
 		return nil, nil, err
 	}
 	n.unAckMsgs = append(n.unAckMsgs, msg)
-	return message.New([][]byte{msg.Body}), func(rctx context.Context, res types.Response) error {
+
+	bmsg := message.New([][]byte{msg.Body})
+	metadata := bmsg.Get(0).Metadata()
+	metadata.Set("nsq_id", string(msg.ID[:]))
+	metadata.Set("nsq_attempts", strconv.Itoa(int(msg.Attempts)))
+	metadata.Set("nsq_nsqd_address", msg.NSQDAddress)
+	metadata.Set("nsq_timestamp", strconv.FormatInt(msg.Timestamp, 10))
+
+	return bmsg, func(rctx context.Context, res types.Response) error {
 		if res.Error() != nil {
 			msg.Requeue(-1)
 		}

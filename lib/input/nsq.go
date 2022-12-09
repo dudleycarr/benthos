@@ -17,6 +17,20 @@ func init() {
 		constructor: fromSimpleConstructor(NewNSQ),
 		Summary: `
 Subscribe to an NSQ instance topic and channel.`,
+		Description: `
+        ### Metadata
+
+        This input adds the following metadata fields to each message:
+
+        ` + "``` text" + `
+        - nsq_attempts
+        - nsq_id
+        - nsq_nsqd_address
+        - nsq_timestamp
+        ` + "```" + `
+
+        You can access these metadata fields using
+        [function interpolation](/docs/configuration/interpolation#metadata).`,
 		FieldSpecs: docs.FieldSpecs{
 			func() docs.FieldSpec {
 				b := batch.FieldSpec()
@@ -30,6 +44,7 @@ Subscribe to an NSQ instance topic and channel.`,
 			docs.FieldCommon("channel", "The channel to consume from."),
 			docs.FieldCommon("user_agent", "A user agent to assume when connecting."),
 			docs.FieldCommon("max_in_flight", "The maximum number of pending messages to consume at any given time."),
+			docs.FieldCommon("max_attempts", "The maximum number of attempts to successfully process a message."),
 		},
 		Categories: []Category{
 			CategoryServices,
